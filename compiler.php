@@ -1,4 +1,3 @@
-#!/usr/bin/env php
 <?php
 function adminer_errors($errno, $errstr) {
 	return !!preg_match('~^(Trying to access array offset on value of type null|Undefined array key)~', $errstr);
@@ -58,7 +57,7 @@ header("Last-Modified: " . gmdate("D, d M Y H:i:s") . " GMT");
 header("Cache-Control: immutable");
 '), $return, $count);
 		if (!$count) {
-			echo "adminer/file.inc.php: Caching headers placeholder not found\n";
+			compile_message("adminer/file.inc.php: Caching headers placeholder not found");
 		}
 	}
 	if ($driver && dirname($match[2]) == "../adminer/drivers") {
@@ -76,7 +75,7 @@ header("Cache-Control: immutable");
 		}
 	}', $return, $count);
 			if (!$count) {
-				echo "lang() not found\n";
+				compile_message("lang() not found");
 			}
 		}
 		$tokens = token_get_all($return); // to find out the last token
@@ -99,7 +98,7 @@ function lang(\$translation, \$number = null) {
 }
 ';
 	} else {
-		echo "lang() \$pos not found\n";
+		compile_message("lang() \$pos not found");
 	}
 }
 
@@ -341,29 +340,30 @@ function number_type() {
 }
 
 $project = "adminer";
-if ($_SERVER["argv"][1] == "editor") {
+if ($opts && reset($opts) == 'editor') {
 	$project = "editor";
-	array_shift($_SERVER["argv"]);
+	array_shift($opts);
 }
 
 $driver = "";
-if (file_exists(dirname(__FILE__) . "/adminer/drivers/" . $_SERVER["argv"][1] . ".inc.php")) {
-	$driver = $_SERVER["argv"][1];
-	array_shift($_SERVER["argv"]);
+if ($opts && file_exists(dirname(__FILE__) . '/adminer/drivers/' . reset($opts) . '.inc.php')) {
+	$driver = reset($opts);
+	array_shift($opts);
 }
 
 unset($_COOKIE["adminer_lang"]);
-$_SESSION["lang"] = $_SERVER["argv"][1]; // Adminer functions read language from session
+$_SESSION['lang'] = $opts ? reset($opts) : null; // Adminer functions read language from session
 include dirname(__FILE__) . "/adminer/include/lang.inc.php";
 if (isset($langs[$_SESSION["lang"]])) {
-	include dirname(__FILE__) . "/adminer/lang/$_SESSION[lang].inc.php";
-	array_shift($_SERVER["argv"]);
+	include dirname(__FILE__) . "/adminer/lang/{$_SESSION['lang']}.inc.php";
+	array_shift($opts);
+}
+else {
+	$_SESSION['lang'] = null;
 }
 
-if ($_SERVER["argv"][1]) {
-	echo "Usage: php compile.php [editor] [driver] [lang]\n";
-	echo "Purpose: Compile adminer[-driver][-lang].php or editor[-driver][-lang].php.\n";
-	exit(1);
+if ($opts) {
+	throw new Exception('Unknown options');
 }
 
 // check function definition in drivers
@@ -378,7 +378,7 @@ foreach (glob(dirname(__FILE__) . "/adminer/drivers/" . ($driver ? $driver : "*"
 		$file = file_get_contents($filename);
 		foreach ($functions as $val) {
 			if (!strpos($file, "$val(")) {
-				fprintf(STDERR, "Missing $val in $filename\n");
+				compile_message("Missing $val in $filename");
 			}
 		}
 	}
@@ -453,6 +453,8 @@ $file = preg_replace('~"\.\./externals/jush/modules/(jush\.js)"~', $replace, $fi
 $file = preg_replace("~<\\?php\\s*\\?>\n?|\\?>\n?<\\?php~", '', $file);
 $file = php_shrink($file);
 
-$filename = $project . (preg_match('~-dev$~', $VERSION) ? "" : "-$VERSION") . ($driver ? "-$driver" : "") . ($_SESSION["lang"] ? "-$_SESSION[lang]" : "") . ".php";
-file_put_contents($filename, $file);
-echo "$filename created (" . strlen($file) . " B).\n";
+if (empty($output_filename)) {
+	$output_filename = $project . (preg_match('~-dev$~', $VERSION) ? "" : "-$VERSION") . ($driver ? "-$driver" : "") . ($_SESSION["lang"] ? "-$_SESSION[lang]" : "") . ".php";
+}
+file_put_contents($output_filename, $file);
+compile_message("$output_filename created (" . strlen($file) . " B).");
